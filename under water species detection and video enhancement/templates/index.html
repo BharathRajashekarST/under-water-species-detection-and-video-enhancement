@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Player with Detect Button</title>
+    <!-- Include ProgressBar.js library -->
+    <script src="https://cdn.jsdelivr.net/npm/progressbar.js@1.1.0/dist/progressbar.js"></script>
+</head>
+<body>
+    <h1>Video Player</h1>
+
+    <style>
+        /* Set the width of the video player to 100% of the viewport width */
+        #videoPlayer1 {
+            width: 99vw; /* Set the width to 100% of the viewport width */
+            height: 460px; /* Let the height adjust automatically based on aspect ratio */
+        }
+
+        #videoPlayer2 {
+            width: 99vw; /* Set the width to 100% of the viewport width */
+            height: 460px; /* Let the height adjust automatically based on aspect ratio */
+        }
+    </style>
+    
+    <!-- Video Player 1 -->
+    <video id="videoPlayer1" controls>
+        <source src="" type="video/mp4">
+        Your browser does not support the video tag.
+    </video>
+
+    <!-- File input field to browse for video -->
+    <input type="file" id="videoFile" name="videoFile" accept="video/mp4,video/x-matroska,video/quicktime,video/x-msvideo">
+    <input type="button" value="Upload" id="uploadButton">
+
+    <!-- Detect Button -->
+    <button id="detectButton">Detect</button>
+
+    <!-- Video Player 2 (Initially hidden) -->
+    <div id="videoPlayer2Container" style="display: none;">
+        <h2>Video Player 2</h2>
+        <video id="videoPlayer2" controls>
+            <source src="" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+    </div>
+
+    <div id="progressBarContainer">
+        <div id="progressBar"></div>
+    </div>
+
+    <script>
+        document.getElementById('uploadButton').addEventListener('click', function() {
+            var fileInput = document.getElementById('videoFile');
+            var file = fileInput.files[0];
+            if (file) {
+                var formData = new FormData();
+                formData.append('videoFile', file);
+                fetch('/upload_video', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    var videoPlayer = document.getElementById('videoPlayer1');
+                    console.log(file);
+                    videoPlayer.src = URL.createObjectURL(file);
+                })
+                .catch(error => console.error('Error:', error));
+            } else {
+                console.log('No file selected.');
+            }
+        });
+       /*
+        document.getElementById('detectButton').addEventListener('click', function(event) {
+            const eventSource = new EventSource('/get_second_video_location');
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                if (data.progressValue < 100) {
+                    if(data.progressValue == 0){
+                        var progressBarContainer = document.getElementById('progressBarContainer');
+                        progressBarContainer.style.display = 'block';
+                    }
+                    // Update progress bar
+                    updateProgressBar(data.progressValue);
+                } else {
+                    // Hide the progress bar and show video player 2
+                    var videoPlayer2Container = document.getElementById('videoPlayer2Container');
+                    var videoPlayer2 = document.getElementById('videoPlayer2');
+                    videoPlayer2.src = data.videoLocation;
+                    console.log(data.videoLocation);
+                    videoPlayer2Container.style.display = 'block';
+
+                    // Hide the progress bar container
+                    var progressBarContainer = document.getElementById('progressBarContainer');
+                    progressBarContainer.style.display = 'none';
+
+                    // Close the event source connection
+                    eventSource.close();
+                }
+            };
+        });
+        */
+        document.getElementById('detectButton').addEventListener('click', function(event) {
+            const eventSource = new EventSource('/get_second_video_location');
+            var displayedClassNames = []; // To keep track of displayed class names
+
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                if (data.progressValue < 100) {
+                    if(data.progressValue == 0){
+                        var progressBarContainer = document.getElementById('progressBarContainer');
+                        progressBarContainer.style.display = 'block';
+                    }
+                    // Update progress bar
+                    updateProgressBar(data.progressValue);
+                } else {
+                    // Hide the progress bar and show video player 2
+                    var videoPlayer2Container = document.getElementById('videoPlayer2Container');
+                    var videoPlayer2 = document.getElementById('videoPlayer2');
+                    videoPlayer2.src = data.videoLocation;
+                    console.log(data.videoLocation);
+                    videoPlayer2Container.style.display = 'block';
+                    console.log(data.selectedObjects);
+                    // Hide the progress bar container
+                    var progressBarContainer = document.getElementById('progressBarContainer');
+                    progressBarContainer.style.display = 'none';
+
+                    // Close the event source connection
+                    eventSource.close();
+
+                    // Display class names corresponding to the current time
+                    videoPlayer2.addEventListener('timeupdate', function() {
+                        var currentTime = Math.floor(videoPlayer2.currentTime); // Get current time of the video
+                        var classNamesToShow = data.selectedObjects.filter(obj => Math.floor(obj.time_second) === currentTime)
+                                                                    .map(obj => obj.class_name);
+
+                        // Remove previously displayed class names that do not belong to the current second
+                        var classNamesToRemove = displayedClassNames.filter(name => !classNamesToShow.includes(name));
+                        classNamesToRemove.forEach(className => {
+                            var elementToRemove = document.getElementById(className.replace(/\s+/g, '')); // Remove spaces from class name for ID
+                            if (elementToRemove) {
+                                elementToRemove.remove();
+                            }
+                        });
+
+                        // Display class names for the current second
+                        classNamesToShow.forEach(className => {
+                            if (!displayedClassNames.includes(className)) {
+                                var classNameWithoutSpaces = className.replace(/\s+/g, ''); // Remove spaces from class name for ID
+                                var h5Element = document.createElement('h5');
+                                h5Element.id = classNameWithoutSpaces;
+                                h5Element.textContent = className;
+                                // Append h5Element to UI container
+                                document.getElementById('classNamesContainer').appendChild(h5Element);
+                            }
+                        });
+
+                        displayedClassNames = classNamesToShow;
+                    });
+                }
+            };
+        });
+
+        // Function to update progress bar
+        var progressBar = new ProgressBar.Circle('#progressBar', {
+            color: '#007bff',
+            strokeWidth: 5, // Thickness of the progress bar
+            trailWidth: 5, // Thickness of the trail behind the progress bar
+            duration: 0, // Update instantly
+            text: {
+                value: '0%'
+            }
+        });
+
+        var progressBarContainer = document.getElementById('progressBarContainer');
+        progressBarContainer.style.width = '200px';
+        progressBarContainer.style.margin = '0 auto';
+        progressBarContainer.style.display = 'none';
+
+        // Function to update progress bar
+        function updateProgressBar(progressValue) {
+            progressBar.animate(progressValue / 100); // Update progress value
+            progressBar.setText((progressValue).toFixed(0) + '%'); // Update progress text
+        }
+    </script>
+</body>
+</html>
